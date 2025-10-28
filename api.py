@@ -4,6 +4,8 @@ import logging
 from flask import Flask, request, jsonify, abort
 import tinytuya
 
+from prometheus_exporter import collect_metrics
+
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tuya-bridge")
@@ -93,6 +95,13 @@ def device_commands(device_id):
     except Exception as e:
         log.exception("Failed to send command to %s: %s", device_id, e)
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/metrics", defaults={"device_id": "bfe98afa941d5a1e2def8s"})
+@app.route("/metrics/<device_id>", methods=["GET"])
+def metrics(device_id):
+    result = collect_metrics(cloud, device_id)
+    return result
 
 
 # simple root

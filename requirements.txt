@@ -23,6 +23,7 @@ packaging==25.0
 parso==0.8.5
 pexpect==4.9.0
 prompt_toolkit==3.0.52
+prometheus_client==0.23.1
 ptyprocess==0.7.0
 pure_eval==0.2.3
 pycparser==2.23
