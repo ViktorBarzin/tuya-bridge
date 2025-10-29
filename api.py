@@ -97,7 +97,6 @@ def device_commands(device_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route("/metrics", defaults={"device_id": "bfe98afa941d5a1e2def8s"})
 @app.route("/metrics/<device_id>", methods=["GET"])
 def metrics(device_id):
     result = collect_metrics(cloud, device_id)
