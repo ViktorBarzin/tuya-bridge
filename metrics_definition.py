@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod, abstractproperty
+import base64
 from dataclasses import dataclass
+import struct
 from typing import Any, override
 from prometheus_client import (
     CollectorRegistry,
@@ -128,3 +130,200 @@ class AutomaticTransferSwitch(MetricsDefinition):
         if "invert" in mode_str:
             return 1
         return 0
+
+
+class Fuse(MetricsDefinition):
+    """
+    RC-RCBO device
+
+         Example format:
+
+         {
+        "result": [
+            {
+                "code": "switch_1",
+                "value": true
+            },
+            {
+                "code": "countdown_1",
+                "value": 0
+            },
+            {
+                "code": "fault",
+                "value": 0
+            },
+            {
+                "code": "relay_status",
+                "value": "2"
+            },
+            {
+                "code": "child_lock",
+                "value": false
+            },
+            {
+                "code": "Voltage",
+                "value": "CUsAAAAA"
+            },
+            {
+                "code": "Current",
+                "value": "AAcTAAAAAAAA"
+            },
+            {
+                "code": "ActivePower",
+                "value": "AA40AA40AAAAAAAA"
+            },
+            {
+                "code": "LeakageCurrent",
+                "value": 9
+            },
+            {
+                "code": "Temperature",
+                "value": 36
+            },
+            {
+                "code": "RemainingEnergy",
+                "value": 0
+            },
+            {
+                "code": "CostParameters",
+                "value": "CRQA"
+            },
+            {
+                "code": "LeakageParameters",
+                "value": "AQAAASwBAQA="
+            },
+            {
+                "code": "VoltageThreshold",
+                "value": "CcQBAQfQAQE="
+            },
+            {
+                "code": "CurrentThreshold",
+                "value": "ALuAAQE="
+            },
+            {
+                "code": "TemperatureThreshold",
+                "value": "MgEB"
+            },
+            {
+                "code": "KWH",
+                "value": 351644
+            },
+            {
+                "code": "NumberAndType",
+                "value": "280100000002        "
+            },
+            {
+                "code": "locking",
+                "value": false
+            },
+            {
+                "code": "RKWH",
+                "value": 0
+            },
+            {
+                "code": "VRecording",
+                "value": "CUYAAAAA"
+            },
+            {
+                "code": "IRecording",
+                "value": "AArqAAAAAAAA"
+            }
+        ],
+        "success": true,
+        "t": 1761770761925,
+        "tid": "47de5af7b50811f0a25e9ed280a40f39"
+    }
+
+    """
+
+    @override
+    def collect(self) -> bytes:
+        result = self.cloud.getstatus(self.device_id)
+        data = result.get("result")
+        metrics = self.metrics_schema
+
+        # convert list of dicts into {code: value}
+        datapoints = {item["code"]: item["value"] for item in data if "code" in item}
+
+        for code, value in datapoints.items():
+            if metrics.get(code) is None:
+                print(f"{code=} not used in out definition")
+                continue
+            decoded = self.decode_metric(code, value)
+            print(f"{code=}:{decoded}")
+            # metrics[code].set(self.decode_metric(code, value))
+            metrics[code].set(decoded)
+
+        result = generate_latest(self.registry)
+        return result
+
+    @property
+    @override
+    def metrics_schema(self) -> dict[str, Gauge]:
+        return {
+            "switch_1": Gauge(
+                "switch_1", "Switch status (0=false, 1=true)", registry=self.registry
+            ),
+            "countdown_1": Gauge("countdown_1", "Countdown", registry=self.registry),
+            "fault": Gauge("fault", "Fault", registry=self.registry),
+            "relay_status": Gauge(
+                "relay_status", "Relay status", registry=self.registry
+            ),
+            "child_lock": Gauge(
+                "child_lock", "Child lock (0=off, 1=on)", registry=self.registry
+            ),
+            "Voltage": Gauge("voltage", "Voltage", registry=self.registry),
+            "Current": Gauge("current", "Current", registry=self.registry),
+            "ActivePower": Gauge(
+                "active_power",
+                "Active power",
+                registry=self.registry,
+            ),
+            "LeakageCurrent": Gauge(
+                "leakage_current",
+                "Leakage current",
+                registry=self.registry,
+            ),
+            "Temperature": Gauge("temperature", "Temperature", registry=self.registry),
+            "RemainingEnergy": Gauge(
+                "remaining_energy", "Remaining energy", registry=self.registry
+            ),
+            "VoltageThreshold": Gauge(
+                "voltage_threshold", "Voltage threshold", registry=self.registry
+            ),
+            "CurrentThreshold": Gauge(
+                "current_threshold", "Current Threshold", registry=self.registry
+            ),
+            "TemperatureThreshold": Gauge(
+                "temperature_threshold", "Temperature threshold", registry=self.registry
+            ),
+            "KWH": Gauge("kwh", "kwh", registry=self.registry),
+            "RKWH": Gauge("rkwh", "rkwh", registry=self.registry),
+        }
+
+    def decode_metric(self, name: str, val: str | int | bool):
+        if isinstance(val, int):
+            return val
+        if isinstance(val, bool):
+            return int(bool)
+        if isinstance(val, str):
+            try:
+                return float(val)
+            except Exception:
+                ...  # continue trying
+        try:
+            raw = base64.b64decode(val)
+            # Most Tuya encodings use 4 bytes for a little-endian integer
+            num = struct.unpack("<I", raw[:4])[0]
+
+            if name.lower().startswith("voltage"):
+                return num / 100.0  # e.g. 19273 -> 192.73 V
+            elif name.lower().startswith("current"):
+                return num / 1000.0  # e.g. 749568 -> 0.749 A
+            elif name.lower().startswith("activepower"):
+                return num / 100.0  # e.g. 13326 -> 133.26 W
+            else:
+                return float(num)
+        except Exception as e:
+            print(f"{e} for {name=}:{val=}")
+            return -1
