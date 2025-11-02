@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import time
 from typing import override
+from tenacity import retry, stop_after_attempt, wait_exponential
 import tinytuya
 from prometheus_client import (
     CollectorRegistry,
@@ -17,6 +18,7 @@ device_id_to_metrics: dict[str, type[MetricsDefinition]] = {
 }
 
 
+@retry(stop=stop_after_attempt(10), wait=wait_exponential(multiplier=1, min=3, max=300))
 def collect_metrics(cloud: tinytuya.Cloud, device_id: str) -> bytes:
     registry = CollectorRegistry()
 

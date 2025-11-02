@@ -22,14 +22,15 @@ matplotlib-inline==0.2.1
 packaging==25.0
 parso==0.8.5
 pexpect==4.9.0
-prompt_toolkit==3.0.52
 prometheus_client==0.23.1
+prompt_toolkit==3.0.52
 ptyprocess==0.7.0
 pure_eval==0.2.3
 pycparser==2.23
 Pygments==2.19.2
 requests==2.32.5
 stack-data==0.6.3
+tenacity==9.1.2
 tinytuya==1.17.4
 traitlets==5.14.3
 urllib3==2.5.0

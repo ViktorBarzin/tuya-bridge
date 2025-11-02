@@ -1,3 +1,5 @@
+import base64
+import struct
 import tinytuya
 import json
 import asyncio
@@ -27,19 +29,19 @@ async def main() -> None:
     # print("Device List: %r" % devices)
 
     # Select a Device ID to Test
-    id = ""  # ATS
+    id = "bfb1bb804a6ca62ad7je7f"
 
     # Display Properties of Device
     # result = c.getproperties(id)
     # print("Properties of device:\n", result)
 
     # Display Status of Device
-    # result = c.getstatus(id)
+    result = c.getstatus(id)
     # change swtih 1
     # result = c.getfunctions(id)
-    # print("Status of device:\n", json.dumps(result, indent=4))
+    print("Status of device:\n", json.dumps(result, indent=4))
 
-    # return
+    return
     # Send Command - Turn on switch
     commands = {
         "commands": [
