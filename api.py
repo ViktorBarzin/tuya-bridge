@@ -100,6 +100,7 @@ def device_commands(device_id):
 
 @app.route("/metrics/<device_id>", methods=["GET"])
 def metrics(device_id):
+    check_auth()
     updated_registry = collect_metrics(cloud, device_id)
 
     result = generate_latest(updated_registry)
@@ -108,6 +109,7 @@ def metrics(device_id):
 
 @app.route("/json/<device_id>", methods=["GET"])
 def collect_json(device_id):
+    check_auth()
     registry = collect_metrics(cloud, device_id)
     metrics = {}
     for metric in registry.collect():
