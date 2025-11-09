@@ -2,6 +2,7 @@
 import os
 import logging
 from flask import Flask, request, jsonify, abort
+from prometheus_client import generate_latest
 import tinytuya
 
 from prometheus_exporter import collect_metrics
@@ -99,8 +100,20 @@ def device_commands(device_id):
 
 @app.route("/metrics/<device_id>", methods=["GET"])
 def metrics(device_id):
-    result = collect_metrics(cloud, device_id)
+    updated_registry = collect_metrics(cloud, device_id)
+
+    result = generate_latest(updated_registry)
     return result
+
+
+@app.route("/json/<device_id>", methods=["GET"])
+def collect_json(device_id):
+    registry = collect_metrics(cloud, device_id)
+    metrics = {}
+    for metric in registry.collect():
+        for sample in metric.samples:
+            metrics[sample.name] = sample.value
+    return jsonify(metrics)
 
 
 # simple root

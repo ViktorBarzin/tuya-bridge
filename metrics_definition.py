@@ -24,7 +24,7 @@ class MetricsDefinition(ABC):
     def metrics_schema(self) -> dict[str, Gauge]: ...
 
     @abstractmethod
-    def collect(self) -> bytes: ...
+    def collect(self) -> CollectorRegistry: ...
 
 
 class AutomaticTransferSwitch(MetricsDefinition):
@@ -77,10 +77,9 @@ class AutomaticTransferSwitch(MetricsDefinition):
         return metrics
 
     @override
-    def collect(self) -> bytes:
+    def collect(self) -> CollectorRegistry:
         result = self.cloud.getstatus(self.device_id)
         data = result.get("result")
-
         metrics = self.metrics_schema
 
         # convert list of dicts into {code: value}
@@ -104,8 +103,7 @@ class AutomaticTransferSwitch(MetricsDefinition):
                     metrics[code].set(float(val))
                 except (TypeError, ValueError):
                     pass
-        result = generate_latest(self.registry)
-        return result
+        return self.registry
 
     def parse_voltage_string(self, vstr):
         """Parse concatenated voltage string like '0238024024.9'"""
@@ -237,7 +235,7 @@ class Fuse(MetricsDefinition):
     """
 
     @override
-    def collect(self) -> bytes:
+    def collect(self) -> CollectorRegistry:
         result = self.cloud.getstatus(self.device_id)
         data = result.get("result")
         metrics = self.metrics_schema
@@ -254,8 +252,7 @@ class Fuse(MetricsDefinition):
             # metrics[code].set(self.decode_metric(code, value))
             metrics[code].set(decoded)
 
-        result = generate_latest(self.registry)
-        return result
+        return self.registry
 
     @property
     @override
