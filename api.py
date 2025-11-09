@@ -32,9 +32,13 @@ app = Flask(__name__)
 
 
 def check_auth():
-    token = request.headers.get("X-API-KEY", "")
-    if token != SERVICE_API_KEY:
-        abort(401, "invalid api key")
+    token = request.headers.get("X-API-KEY", None)
+    if token is not None and token == SERVICE_API_KEY:
+        return
+    token = request.args.get("api-key", None)
+    if token is not None and token == SERVICE_API_KEY:
+        return
+    abort(401, "invalid api key")
 
 
 @app.route("/health", methods=["GET"])
