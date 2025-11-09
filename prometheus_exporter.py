@@ -13,8 +13,8 @@ from metrics_definition import AutomaticTransferSwitch, Fuse, MetricsDefinition
 
 device_id_to_metrics: dict[str, type[MetricsDefinition]] = {
     "bfe98afa941d5a1e2def8s": AutomaticTransferSwitch,
-    "bf62301ef04e38d881ugcu": Fuse,
-    "bf1a684e80ae942e4dji6b": Fuse,
+    "bf62301ef04e38d881ugcu": Fuse,  # main
+    "bf1a684e80ae942e4dji6b": Fuse,  # garage
 }
 
 
