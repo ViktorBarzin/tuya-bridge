@@ -109,9 +109,10 @@ class AutomaticTransferSwitch(MetricsDefinition):
         """Parse concatenated voltage string like '0238024024.9'"""
         try:
             # crude example: split into 3 parts of 4, 4, and rest
-            l1 = int(vstr[0:3])
-            l2 = int(vstr[3:6])
-            batt = float(vstr[6:])
+            # example value: 0238023924.8
+            l1 = int(vstr[0:4])
+            l2 = int(vstr[4:8])
+            batt = float(vstr[8:])
             return l1, l2, batt
         except Exception:
             return None, None, None
