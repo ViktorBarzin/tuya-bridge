@@ -245,8 +245,13 @@ class Fuse(MetricsDefinition):
         datapoints = {item["code"]: item["value"] for item in data if "code" in item}
 
         for code, value in datapoints.items():
+            # Special cases
+            if code.lower().startswith("voltagethreshold"):
+                low_threshold, high_threshold = self.decode_voltage_threshold(value)
+                metrics["LowVoltageThreshold"].set(low_threshold)
+                metrics["HighVoltageThreshold"].set(high_threshold)
             if metrics.get(code) is None:
-                print(f"{code=} not used in out definition")
+                print(f"{code=} not used in our definition")
                 continue
             decoded = self.decode_metric(code, value)
             print(f"{code=}:{decoded}")
@@ -286,8 +291,13 @@ class Fuse(MetricsDefinition):
             "RemainingEnergy": Gauge(
                 "remaining_energy", "Remaining energy", registry=self.registry
             ),
-            "VoltageThreshold": Gauge(
-                "voltage_threshold", "Voltage threshold", registry=self.registry
+            "LowVoltageThreshold": Gauge(
+                "low_voltage_threshold", "Low voltage threshold", registry=self.registry
+            ),
+            "HighVoltageThreshold": Gauge(
+                "high_voltage_threshold",
+                "High voltage threshold",
+                registry=self.registry,
             ),
             "CurrentThreshold": Gauge(
                 "current_threshold", "Current Threshold", registry=self.registry
@@ -309,6 +319,12 @@ class Fuse(MetricsDefinition):
                 return float(val)
             except Exception:
                 ...  # continue trying
+
+        if name.lower().startswith("temperaturethreshold"):
+            raw = base64.b64decode(val)
+            value = raw[0] + (raw[1] << 8)  # little endian 16-bit
+            scale = raw[2]
+            return value / (10**scale)
         try:
             raw = base64.b64decode(val)
             # Most Tuya encodings use 4 bytes for a little-endian integer
@@ -325,3 +341,26 @@ class Fuse(MetricsDefinition):
         except Exception as e:
             print(f"{e} for {name=}:{val=}")
             return -1
+
+    def decode_voltage_threshold(self, val: str) -> tuple[float, float]:
+        thresholds = []
+        raw = base64.b64decode(val)
+
+        for i in range(0, len(raw), 4):
+            v = raw[i] + (raw[i + 1] << 8)
+            scale = raw[i + 2]
+            enabled = raw[i + 3] == 1
+
+            # HOCH meters store voltage thresholds at ×100
+            value = v / 100
+
+            thresholds.append(
+                {
+                    "value_v": value,
+                    "enabled": enabled,
+                }
+            )
+        low_threshold = thresholds[0]["value_v"]
+        high_threshold = thresholds[1]["value_v"]
+
+        return low_threshold, high_threshold
