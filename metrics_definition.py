@@ -343,24 +343,8 @@ class Fuse(MetricsDefinition):
             return -1
 
     def decode_voltage_threshold(self, val: str) -> tuple[float, float]:
-        thresholds = []
         raw = base64.b64decode(val)
-
-        for i in range(0, len(raw), 4):
-            v = raw[i] + (raw[i + 1] << 8)
-            scale = raw[i + 2]
-            enabled = raw[i + 3] == 1
-
-            # HOCH meters store voltage thresholds at ×100
-            value = v / 100
-
-            thresholds.append(
-                {
-                    "value_v": value,
-                    "enabled": enabled,
-                }
-            )
-        low_threshold = thresholds[0]["value_v"]
-        high_threshold = thresholds[1]["value_v"]
+        high_threshold = int.from_bytes(raw[0:2], "big") / 10
+        low_threshold = int.from_bytes(raw[4:6], "big") / 10
 
         return low_threshold, high_threshold
