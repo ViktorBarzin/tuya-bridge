@@ -16,8 +16,8 @@ cache = cachetools.TTLCache(maxsize=100, ttl=30)
 
 device_id_to_metrics: dict[str, type[MetricsDefinition]] = {
     "bfe98afa941d5a1e2def8s": AutomaticTransferSwitch,
-    "bf62301ef04e38d881ugcu": Fuse,  # main
-    "bf1a684e80ae942e4dji6b": Fuse,  # garage
+    "bf1a684e80ae942e4dji6b": Fuse,  # main
+    "bf62301ef04e38d881ugcu": Fuse,  # garage
 }
 
 
