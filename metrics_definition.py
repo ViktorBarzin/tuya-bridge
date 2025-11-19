@@ -335,7 +335,7 @@ class Fuse(MetricsDefinition):
             elif name.lower().startswith("current"):
                 return num / 1000.0  # e.g. 749568 -> 0.749 A
             elif name.lower().startswith("activepower"):
-                return num / 100.0  # e.g. 13326 -> 133.26 W
+                return int.from_bytes(raw[0:3], "big") / 10000  # kWh
             else:
                 return float(num)
         except Exception as e:
