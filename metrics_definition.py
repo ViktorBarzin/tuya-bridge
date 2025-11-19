@@ -250,6 +250,7 @@ class Fuse(MetricsDefinition):
                 low_threshold, high_threshold = self.decode_voltage_threshold(value)
                 metrics["LowVoltageThreshold"].set(low_threshold)
                 metrics["HighVoltageThreshold"].set(high_threshold)
+
             if metrics.get(code) is None:
                 print(f"{code=} not used in our definition")
                 continue
@@ -322,9 +323,8 @@ class Fuse(MetricsDefinition):
 
         if name.lower().startswith("temperaturethreshold"):
             raw = base64.b64decode(val)
-            value = raw[0] + (raw[1] << 8)  # little endian 16-bit
-            scale = raw[2]
-            return value / (10**scale)
+            value = int(raw[0])
+            return value
         try:
             raw = base64.b64decode(val)
             # Most Tuya encodings use 4 bytes for a little-endian integer
