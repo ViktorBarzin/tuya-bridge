@@ -331,7 +331,7 @@ class Fuse(MetricsDefinition):
             num = struct.unpack("<I", raw[:4])[0]
 
             if name.lower().startswith("voltage"):
-                return num / 100.0  # e.g. 19273 -> 192.73 V
+                return int.from_bytes(raw[0:2], "big")
             elif name.lower().startswith("current"):
                 return int.from_bytes(raw[0:3], "big") / 1000
             elif name.lower().startswith("activepower"):
