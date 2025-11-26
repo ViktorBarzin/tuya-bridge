@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod, abstractproperty
 import base64
 from dataclasses import dataclass
+import logging
 import struct
 from typing import Any, override
 from prometheus_client import (
@@ -11,6 +12,9 @@ from prometheus_client import (
 from abc import abstractmethod
 
 import tinytuya
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("tuya-bridge")
 
 
 @dataclass
@@ -252,10 +256,9 @@ class Fuse(MetricsDefinition):
                 metrics["HighVoltageThreshold"].set(high_threshold)
 
             if metrics.get(code) is None:
-                print(f"{code=} not used in our definition")
+                log.debug(f"{code=} not used in our definition")
                 continue
             decoded = self.decode_metric(code, value)
-            print(f"{code=}:{decoded}")
             # metrics[code].set(self.decode_metric(code, value))
             metrics[code].set(decoded)
 

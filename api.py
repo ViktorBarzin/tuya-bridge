@@ -6,6 +6,7 @@ from prometheus_client import generate_latest
 import tinytuya
 
 from prometheus_exporter import collect_metrics
+from slack import send_message
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +39,7 @@ def check_auth():
     token = request.args.get("api-key", None)
     if token is not None and token == SERVICE_API_KEY:
         return
+    send_message("Unauthorized access attempt")
     abort(401, "invalid api key")
 
 
@@ -98,7 +100,9 @@ def device_commands(device_id):
         res = cloud.sendcommand(device_id, payload)
         return jsonify({"success": True, "result": res})
     except Exception as e:
-        log.exception("Failed to send command to %s: %s", device_id, e)
+        msg = f"Failed to send command {payload} to {device_id}: {e}"
+        send_message(msg)
+        log.exception(msg)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
