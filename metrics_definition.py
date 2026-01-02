@@ -351,3 +351,271 @@ class Fuse(MetricsDefinition):
         low_threshold = int.from_bytes(raw[4:6], "big") / 10
 
         return low_threshold, high_threshold
+
+
+class Thermostat(MetricsDefinition):
+    """
+    https://pb.viktorbarzin.me/?beeb58e7ee5218b6#3gcvhrAu3d5vP1dPQcoTJ44hEURsBdT7xP4VSYKNPMSi
+      {
+    "result": [
+        {
+            "code": "switch",
+            "value": true
+        },
+        {
+            "code": "mode",
+            "value": "heat"
+        },
+        {
+            "code": "work_state",
+            "value": "heating_off"
+        },
+        {
+            "code": "temp_set",
+            "value": 210
+        },
+        {
+            "code": "temp_set_f",
+            "value": 50
+        },
+        {
+            "code": "upper_temp_f",
+            "value": 50
+        },
+        {
+            "code": "upper_temp",
+            "value": 350
+        },
+        {
+            "code": "lower_temp_f",
+            "value": 50
+        },
+        {
+            "code": "temp_current",
+            "value": 240
+        },
+        {
+            "code": "lower_temp",
+            "value": 100
+        },
+        {
+            "code": "temp_correction",
+            "value": -10
+        },
+        {
+            "code": "holiday_temp_set",
+            "value": 200
+        },
+        {
+            "code": "holiday_days_set",
+            "value": 1
+        },
+        {
+            "code": "humidity",
+            "value": 35
+        },
+        {
+            "code": "child_lock",
+            "value": false
+        },
+        {
+            "code": "sensor_choose",
+            "value": "internal"
+        },
+        {
+            "code": "backlight",
+            "value": 50
+        },
+        {
+            "code": "run_mode",
+            "value": "program"
+        },
+        {
+            "code": "control_algorithm",
+            "value": "TPI_UFH"
+        },
+        {
+            "code": "max_heat_temp_set_f",
+            "value": 350
+        },
+        {
+            "code": "min_heat_temp_set_f",
+            "value": 100
+        },
+        {
+            "code": "max_cool_temp_set_f",
+            "value": 150
+        },
+        {
+            "code": "min_cool_temp_set_f",
+            "value": 70
+        },
+        {
+            "code": "frost_set",
+            "value": 50
+        },
+        {
+            "code": "valve_protection",
+            "value": true
+        },
+        {
+            "code": "relay_type",
+            "value": "NO_COM"
+        },
+        {
+            "code": "week_program_13_1",
+            "value": "AQUAAOYIAADSDgAA0hAAAOYRAADmFgAA0g=="
+        },
+        {
+            "code": "week_program_13_2",
+            "value": "AgUAAOYIAADSDgAA0hAAAOYRAADmFgAA0g=="
+        },
+        {
+            "code": "week_program_13_3",
+            "value": "AwUAAOYIAADSDgAA0hAAAOYRAADmFgAA0g=="
+        },
+        {
+            "code": "week_program_13_4",
+            "value": "BAUAAOYIAADSDgAA0hAAAOYRAADmFgAA0g=="
+        },
+        {
+            "code": "week_program_13_5",
+            "value": "BQUAAOYIAADSDgAA0hAAAOYRAADmFgAA0g=="
+        },
+        {
+            "code": "week_program_13_6",
+            "value": "BgYeAOYIAADmDgAA5hAAAOYSAADmFgAA0g=="
+        },
+        {
+            "code": "week_program_13_7",
+            "value": "BwYeAOYIAADmDgAA5hAAAOYSAADmFgAA0g=="
+        },
+        {
+            "code": "current_temp_floor",
+            "value": 0
+        },
+        {
+            "code": "temp_resolution",
+            "value": "0_1"
+        },
+        {
+            "code": "warm_floor",
+            "value": "OFF"
+        },
+        {
+            "code": "pin_to_unlock",
+            "value": false
+        },
+        {
+            "code": "sensor_error",
+            "value": "E2"
+        },
+        {
+            "code": "is_password_set",
+            "value": false
+        }
+    ],
+    "success": true,
+    "t": 1767355102647,
+    "tid": "5657803fe7d211f0a6d2e2403ac67220"
+    }
+    """
+
+    @override
+    def collect(self) -> CollectorRegistry:
+        result = self.cloud.getstatus(self.device_id)
+        data = result.get("result")
+        metrics = self.metrics_schema
+
+        # convert list of dicts into {code: value}
+        datapoints = {item["code"]: item["value"] for item in data if "code" in item}
+
+        for code, value in datapoints.items():
+            if metrics.get(code) is None:
+                log.debug(f"{code=} not used in our definition")
+                continue
+            if code == "work_state":
+                if value == "heating":
+                    decoded = 0
+                elif value == "heating_off":
+                    decoded = 1
+                elif value == 'cooling':
+                    decoded = 2
+                elif value == 'cooling_off':
+                    decoded = 3
+                else:
+                    decoded = -1
+            elif code == 'run_mode':
+                # Manual, Program, Holiday, Frost, Temporary
+                value = value.lower()
+                if value == 'manual':
+                    decoded = 0
+                elif value == 'program':
+                    decoded = 1
+                elif value == 'holiday':
+                    decoded = 2
+                elif value == 'frost':
+                    decoded = 3
+                elif value == 'temporary':
+                    decoded = 4
+            else:
+                decoded = value
+            # metrics[code].set(self.decode_metric(code, value))
+            metrics[code].set(decoded)
+
+        return self.registry
+
+    @property
+    @override
+    def metrics_schema(self) -> dict[str, Gauge]:
+        return {
+            "RKWH": Gauge("rkwh", "rkwh", registry=self.registry),
+            "switch": Gauge(
+                "switch",
+                "Device switch state (1=true, 0=false)",
+                registry=self.registry,
+            ),
+            "temp_set": Gauge(
+                "temp_set", "Configured temperature", registry=self.registry
+            ),
+            "temp_set_f": Gauge(
+                "temp_set_f", "Configured temperature (F)", registry=self.registry
+            ),
+            "upper_temp_f": Gauge(
+                "upper_temp_f", "Upper temperature limit (F)", registry=self.registry
+            ),
+            "upper_temp": Gauge(
+                "upper_temp", "Upper temperature limit", registry=self.registry
+            ),
+            "lower_temp_f": Gauge(
+                "lower_temp_f", "Lower temperature limit (F)", registry=self.registry
+            ),
+            "temp_current": Gauge(
+                "temp_current", "Current temperature", registry=self.registry
+            ),
+            "lower_temp": Gauge(
+                "lower_temp", "Lower temperature limit", registry=self.registry
+            ),
+            "temp_correction": Gauge(
+                "temp_correction", "Temperature correction", registry=self.registry
+            ),
+            "holiday_temp_set": Gauge(
+                "holiday_temp_set",
+                "Holiday temperature setpoint",
+                registry=self.registry,
+            ),
+            "holiday_days_set": Gauge(
+                "holiday_days_set", "Holiday days configured", registry=self.registry
+            ),
+            "humidity": Gauge(
+                "humidity", "Current humidity percentage", registry=self.registry
+            ),
+            "child_lock": Gauge(
+                "child_lock",
+                "Child lock enabled (1=true, 0=false)",
+                registry=self.registry,
+            ),
+            "backlight": Gauge("backlight", "Backlight level", registry=self.registry),
+            "work_state": Gauge("work_state", "Work state (heating_off=0, heating_on=1)", registry=self.registry),
+            "run_mode": Gauge("run_mode", "Work mode(Manual=0, Program=1, Holiday=2, Frost=3, Temporary=4)", registry=self.registry),
+        }

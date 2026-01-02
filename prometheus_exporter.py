@@ -10,7 +10,12 @@ from prometheus_client import (
     Gauge,
 )
 
-from metrics_definition import AutomaticTransferSwitch, Fuse, MetricsDefinition
+from metrics_definition import (
+    AutomaticTransferSwitch,
+    Fuse,
+    MetricsDefinition,
+    Thermostat,
+)
 
 cache = cachetools.TTLCache(maxsize=100, ttl=30)
 
@@ -18,6 +23,10 @@ device_id_to_metrics: dict[str, type[MetricsDefinition]] = {
     "bfe98afa941d5a1e2def8s": AutomaticTransferSwitch,
     "bf1a684e80ae942e4dji6b": Fuse,  # main
     "bf62301ef04e38d881ugcu": Fuse,  # garage
+    "bf7efce9519bd508df431s": Thermostat,  # hol
+    "bf70e80159641f61a5lzho": Thermostat,  # master bedroom
+    "bf9597a0064f0349d4b09x": Thermostat,  # office
+    "bfe64da91577117e0annt5": Thermostat,  # kid's room
 }
 
 
