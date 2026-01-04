@@ -104,7 +104,7 @@ def device_commands(device_id):
         send_message(f"Handling {commands} for {device_id}")
         log.info(f"Handling {commands} for {device_id}")
         res = cloud.sendcommand(device_id, payload)
-        send_message(f"Successfully handled {commands} for {device_id}")
+        send_message(f"Successfully handled {commands} for {device_id}: {res}")
         log.info(f"Successfully handled {commands} for {device_id}")
         return jsonify({"success": True, "result": res})
     except Exception as e:
