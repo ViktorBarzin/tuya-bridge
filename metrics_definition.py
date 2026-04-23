@@ -3,6 +3,7 @@ import base64
 from dataclasses import dataclass
 import logging
 import struct
+import time
 from typing import Any, override
 from prometheus_client import (
     CollectorRegistry,
@@ -15,6 +16,22 @@ import tinytuya
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tuya-bridge")
+
+# Rate-limit Tuya error logging. Without this a single expired-subscription event
+# flooded logs with a stack trace per request (many-per-second per device).
+_ERROR_LOG_THROTTLE_SECONDS = 60
+_last_error_log: dict[tuple, float] = {}
+
+
+def _log_tuya_error(result: Any) -> None:
+    code = result.get("code") if isinstance(result, dict) else None
+    msg = result.get("msg") if isinstance(result, dict) else None
+    key = (code, msg)
+    now = time.time()
+    if now - _last_error_log.get(key, 0.0) < _ERROR_LOG_THROTTLE_SECONDS:
+        return
+    _last_error_log[key] = now
+    log.error("Tuya Cloud error: code=%s msg=%s", code, msg)
 
 
 @dataclass
@@ -29,6 +46,27 @@ class MetricsDefinition(ABC):
 
     @abstractmethod
     def collect(self) -> CollectorRegistry: ...
+
+    def _extract_datapoints(self, result: Any) -> list | None:
+        """Validate a Tuya Cloud response and emit the tuya_cloud_up gauge.
+
+        Returns the device datapoint list on success, or None if the cloud
+        rejected the call (expired subscription, rate limit, etc.). Callers
+        should return self.registry unchanged when this returns None so the
+        /metrics endpoint stays 200 OK with just tuya_cloud_up=0.
+        """
+        up = Gauge(
+            "tuya_cloud_up",
+            "1 if the last Tuya Cloud call for this device succeeded, 0 otherwise",
+            registry=self.registry,
+        )
+        data = result.get("result") if isinstance(result, dict) else None
+        if not isinstance(data, list):
+            up.set(0)
+            _log_tuya_error(result)
+            return None
+        up.set(1)
+        return data
 
 
 class AutomaticTransferSwitch(MetricsDefinition):
@@ -83,7 +121,9 @@ class AutomaticTransferSwitch(MetricsDefinition):
     @override
     def collect(self) -> CollectorRegistry:
         result = self.cloud.getstatus(self.device_id)
-        data = result.get("result")
+        data = self._extract_datapoints(result)
+        if data is None:
+            return self.registry
         metrics = self.metrics_schema
 
         # convert list of dicts into {code: value}
@@ -242,7 +282,9 @@ class Fuse(MetricsDefinition):
     @override
     def collect(self) -> CollectorRegistry:
         result = self.cloud.getstatus(self.device_id)
-        data = result.get("result")
+        data = self._extract_datapoints(result)
+        if data is None:
+            return self.registry
         metrics = self.metrics_schema
 
         # convert list of dicts into {code: value}
@@ -524,7 +566,9 @@ class Thermostat(MetricsDefinition):
     @override
     def collect(self) -> CollectorRegistry:
         result = self.cloud.getstatus(self.device_id)
-        data = result.get("result")
+        data = self._extract_datapoints(result)
+        if data is None:
+            return self.registry
         metrics = self.metrics_schema
 
         # convert list of dicts into {code: value}
