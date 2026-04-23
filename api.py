@@ -1,5 +1,7 @@
 # app.py
 import os
+import time
+import threading
 import logging
 from flask import Flask, request, jsonify, abort
 from prometheus_client import generate_latest
@@ -18,6 +20,13 @@ TINYTUYA_API_KEY = os.getenv("TINYTUYA_API_KEY")
 TINYTUYA_API_SECRET = os.getenv("TINYTUYA_API_SECRET")
 SERVICE_API_KEY = os.getenv("SERVICE_API_KEY", "change-me")  # used by clients (HA)
 
+# Tuya-cloud-aware health probe knobs. /health returns 503 if the background
+# probe has not succeeded within STALE_AFTER seconds; this is what the kubelet
+# liveness probe reads to detect a silently-hung bridge (gunicorn workers up
+# but the Tuya cloud call path is dead).
+HEALTH_PROBE_INTERVAL = int(os.getenv("HEALTH_PROBE_INTERVAL", "60"))
+HEALTH_STALE_AFTER = int(os.getenv("HEALTH_STALE_AFTER", "300"))
+
 if not (TINYTUYA_API_KEY and TINYTUYA_API_SECRET):
     log.error("Missing TINYTUYA_API_KEY or TINYTUYA_API_SECRET environment variables.")
     raise SystemExit("Missing Tuya credentials")
@@ -27,6 +36,38 @@ log.info("Initializing TinyTuya Cloud client for region=%s", TINYTUYA_REGION)
 cloud = tinytuya.Cloud(
     apiRegion=TINYTUYA_REGION, apiKey=TINYTUYA_API_KEY, apiSecret=TINYTUYA_API_SECRET
 )
+
+# Separate Cloud client for the health probe so its requests.Session doesn't
+# race with request handlers that share `cloud`.
+_probe_cloud = tinytuya.Cloud(
+    apiRegion=TINYTUYA_REGION, apiKey=TINYTUYA_API_KEY, apiSecret=TINYTUYA_API_SECRET
+)
+_last_tuya_success = 0.0
+_last_tuya_error: str | None = None
+_probe_lock = threading.Lock()
+
+
+def _tuya_probe_loop() -> None:
+    global _last_tuya_success, _last_tuya_error
+    while True:
+        try:
+            result = _probe_cloud.getdevices()
+            if isinstance(result, list):
+                with _probe_lock:
+                    _last_tuya_success = time.time()
+                    _last_tuya_error = None
+            else:
+                with _probe_lock:
+                    _last_tuya_error = f"unexpected response: {result!r}"[:200]
+                log.warning("Tuya probe returned non-list: %r", result)
+        except Exception as e:
+            with _probe_lock:
+                _last_tuya_error = f"{type(e).__name__}: {e}"[:200]
+            log.warning("Tuya probe failed: %s: %s", type(e).__name__, e)
+        time.sleep(HEALTH_PROBE_INTERVAL)
+
+
+threading.Thread(target=_tuya_probe_loop, daemon=True, name="tuya-probe").start()
 
 # --- Flask app ---
 app = Flask(__name__)
@@ -45,7 +86,20 @@ def check_auth():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"ok": True, "region": TINYTUYA_REGION})
+    with _probe_lock:
+        last_success = _last_tuya_success
+        last_error = _last_tuya_error
+    now = time.time()
+    age = now - last_success if last_success > 0 else None
+    healthy = age is not None and age <= HEALTH_STALE_AFTER
+    body = {
+        "ok": healthy,
+        "region": TINYTUYA_REGION,
+        "last_success_age_seconds": age,
+        "stale_after_seconds": HEALTH_STALE_AFTER,
+        "last_error": last_error,
+    }
+    return jsonify(body), (200 if healthy else 503)
 
 
 @app.route("/devices", methods=["GET"])
