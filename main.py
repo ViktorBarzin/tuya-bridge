@@ -29,7 +29,9 @@ async def main() -> None:
     # print("Device List: %r" % devices)
 
     # Select a Device ID to Test
-    id = "bfb1bb804a6ca62ad7je7f"
+    # id = "bf62301ef04e38d881ugcu"
+    # id = "bf1a684e80ae942e4dji6b"  # Fuse
+    id = "bf9597a0064f0349d4b09x"  # thermostat office
 
     # Display Properties of Device
     # result = c.getproperties(id)
@@ -37,6 +39,7 @@ async def main() -> None:
 
     # Display Status of Device
     result = c.getstatus(id)
+    # result = c.getproperties(id)
     # change swtih 1
     # result = c.getfunctions(id)
     print("Status of device:\n", json.dumps(result, indent=4))
